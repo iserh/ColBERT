@@ -40,10 +40,11 @@ class Checkpoint(ColBERT):
 
                 return D
 
-    def queryFromText(self, queries, bsize=None, to_cpu=False, context=None):
+    def queryFromText(self, queries, bsize=None, to_cpu=False, context=None, showprogress=False):
         if bsize:
             batches = self.query_tokenizer.tensorize(queries, context=context, bsize=bsize)
-            batches = [self.query(input_ids, attention_mask, to_cpu=to_cpu) for input_ids, attention_mask in batches]
+            batches = [self.query(input_ids, attention_mask, to_cpu=to_cpu)
+                       for input_ids, attention_mask in tqdm(batches, disable=not showprogress)]
             return torch.cat(batches)
 
         input_ids, attention_mask = self.query_tokenizer.tensorize(queries, context=context)
