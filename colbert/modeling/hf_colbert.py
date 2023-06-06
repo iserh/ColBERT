@@ -91,7 +91,10 @@ def class_factory(name_or_path):
 
             self.config = config
             self.dim = colbert_config.dim
-            self.linear = nn.Linear(config.hidden_size, colbert_config.dim, bias=False)
+            if colbert_config.dim != config.hidden_size:
+                self.linear = nn.Linear(config.hidden_size, colbert_config.dim, bias=False)
+            else:
+                self.linear = nn.Identity()
             setattr(self,self.base_model_prefix, model_class_object(config))
 
             # if colbert_config.relu:
