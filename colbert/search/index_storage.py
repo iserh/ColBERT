@@ -86,7 +86,7 @@ class IndexScorer(IndexLoader, CandidateGeneration):
             scores, pids = self.score_pids(config, Q, pids, centroid_scores)
 
             scores_sorter = scores.sort(descending=True)
-            pids, scores = pids[scores_sorter.indices].tolist(), scores_sorter.values.tolist()
+            pids, scores = pids[scores_sorter.indices], scores_sorter.values
 
             return pids, scores
 
