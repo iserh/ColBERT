@@ -25,6 +25,8 @@ def init(rank):
 
         torch.cuda.set_device(rank % num_gpus)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
+    elif is_distributed:
+        torch.distributed.init_process_group(backend='gloo', init_method='env://')
 
     return nranks, is_distributed
 
@@ -34,4 +36,7 @@ def barrier(rank):
     nranks = max(1, nranks)
 
     if rank >= 0 and nranks > 1:
-        torch.distributed.barrier(device_ids=[rank % torch.cuda.device_count()])
+        if torch.cuda.is_available():
+            torch.distributed.barrier(device_ids=[rank % torch.cuda.device_count()])
+        else:
+            torch.distributed.barrier()
