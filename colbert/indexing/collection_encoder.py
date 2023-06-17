@@ -8,7 +8,7 @@ class CollectionEncoder():
     def __init__(self, config, checkpoint):
         self.config = config
         self.checkpoint = checkpoint
-        self.use_gpu = self.config.total_visible_gpus > 0
+        self.use_gpu = len(self.config.gpus_) > 0
 
     def encode_passages(self, passages):
         Run().print(f"#> Encoding {len(passages)} passages..")

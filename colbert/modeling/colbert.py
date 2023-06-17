@@ -18,7 +18,7 @@ class ColBERT(BaseColBERT):
 
     def __init__(self, name='bert-base-uncased', colbert_config=None):
         super().__init__(name, colbert_config)
-        self.use_gpu = colbert_config.total_visible_gpus > 0
+        self.use_gpu = len(colbert_config.gpus_) > 0
 
         ColBERT.try_load_torch_extensions(self.use_gpu)
 
@@ -163,7 +163,7 @@ def colbert_score(Q, D_padded, D_mask, config=ColBERTConfig()):
         EVENTUALLY: Consider masking with -inf for the maxsim (or enforcing a ReLU).
     """
 
-    use_gpu = config.total_visible_gpus > 0
+    use_gpu = len(config.gpus_) > 0
     if use_gpu:
         Q, D_padded, D_mask = Q.cuda(), D_padded.cuda(), D_mask.cuda()
 
@@ -181,7 +181,7 @@ def colbert_score_packed(Q, D_packed, D_lengths, config=ColBERTConfig()):
         Works with a single query only.
     """
 
-    use_gpu = config.total_visible_gpus > 0
+    use_gpu = len(config.gpus_) > 0
 
     if use_gpu:
         Q, D_packed, D_lengths = Q.cuda(), D_packed.cuda(), D_lengths.cuda()

@@ -37,7 +37,7 @@ class Searcher:
         self.configure(checkpoint=self.checkpoint, collection=self.collection)
 
         self.checkpoint = Checkpoint(self.checkpoint, colbert_config=self.config)
-        use_gpu = self.config.total_visible_gpus > 0
+        use_gpu = len(self.config.gpus_) > 0
         if use_gpu:
             self.checkpoint = self.checkpoint.cuda()
         self.ranker = IndexScorer(self.index, use_gpu)

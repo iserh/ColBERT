@@ -8,7 +8,7 @@ ALREADY_INITALIZED = False
 # TODO: Consider torch.distributed.is_initialized() instead
 
 
-def init(rank):
+def init(rank, gpus):
     nranks = 'WORLD_SIZE' in os.environ and int(os.environ['WORLD_SIZE'])
     nranks = max(1, nranks)
     is_distributed = (nranks > 1) or ('WORLD_SIZE' in os.environ)
@@ -19,14 +19,14 @@ def init(rank):
 
     ALREADY_INITALIZED = True
 
-    if is_distributed and torch.cuda.is_available():
-        num_gpus = torch.cuda.device_count()
-        print(f'nranks = {nranks} \t num_gpus = {num_gpus} \t device={rank % num_gpus}')
+    if is_distributed:
+        if len(gpus) > 0:
+            print(f'nranks = {nranks} \t gpus = {gpus} \t device={gpus[rank]}')
 
-        torch.cuda.set_device(rank % num_gpus)
-        torch.distributed.init_process_group(backend='nccl', init_method='env://')
-    elif is_distributed:
-        torch.distributed.init_process_group(backend='gloo', init_method='env://')
+            torch.cuda.set_device(gpus[rank])
+            torch.distributed.init_process_group(backend='nccl', init_method='env://')
+        else:
+            torch.distributed.init_process_group(backend='gloo', init_method='env://')
 
     return nranks, is_distributed
 
@@ -36,7 +36,8 @@ def barrier(rank):
     nranks = max(1, nranks)
 
     if rank >= 0 and nranks > 1:
-        if torch.cuda.is_available():
-            torch.distributed.barrier(device_ids=[rank % torch.cuda.device_count()])
+        if os.environ["CUDA_VISIBLE_DEVICES"] != "":
+            gpus = list(map(int, os.environ["CUDA_VISIBLE_DEVICES"].split(",")))
+            torch.distributed.barrier(device_ids=[gpus[rank]])
         else:
             torch.distributed.barrier()

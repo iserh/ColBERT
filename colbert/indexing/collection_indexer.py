@@ -42,7 +42,7 @@ class CollectionIndexer():
         self.config = config
         self.rank, self.nranks = self.config.rank, self.config.nranks
 
-        self.use_gpu = self.config.total_visible_gpus > 0
+        self.use_gpu = len(self.config.gpus_) > 0
 
         if self.config.rank == 0:
             self.config.help()
@@ -79,7 +79,7 @@ class CollectionIndexer():
     def setup(self):
         '''
         Calculates and saves plan.json for the whole collection.
-        
+
         plan.json { config, num_chunks, num_partitions, num_embeddings_est, avg_doclen_est}
         num_partitions is the number of centroids to be generated.
         '''
@@ -94,7 +94,7 @@ class CollectionIndexer():
 
         self.num_chunks = int(np.ceil(len(self.collection) / self.collection.get_chunksize()))
 
-        # Saves sampled passages and embeddings for training k-means centroids later 
+        # Saves sampled passages and embeddings for training k-means centroids later
         sampled_pids = self._sample_pids()
         avg_doclen_est = self._sample_embeddings(sampled_pids)
 
@@ -346,7 +346,7 @@ class CollectionIndexer():
                     Run().print_main(f"#> Found chunk {chunk_idx} in the index already, skipping encoding...")
                     continue
                 # Encode passages into embeddings with the checkpoint model
-                embs, doclens = self.encoder.encode_passages(passages) 
+                embs, doclens = self.encoder.encode_passages(passages)
                 if self.use_gpu:
                     assert embs.dtype == torch.float16
                 else:

@@ -19,7 +19,7 @@ class ResidualCodec:
     Embeddings = ResidualEmbeddings
 
     def __init__(self, config, centroids, avg_residual=None, bucket_cutoffs=None, bucket_weights=None):
-        self.use_gpu = config.total_visible_gpus > 0
+        self.use_gpu = len(config.gpus_) > 0
 
         ResidualCodec.try_load_torch_extensions(self.use_gpu)
 
