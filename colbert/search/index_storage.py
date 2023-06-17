@@ -65,7 +65,7 @@ class IndexScorer(IndexLoader, CandidateGeneration):
         return self.embeddings_strided.lookup_pids(passage_ids, out_device)
 
     def retrieve(self, config, Q):
-        Q = Q[:, :config.query_maxlen]   # NOTE: Candidate generation uses only the query tokens
+        # Q = Q[:, :config.query_maxlen]   # NOTE: Candidate generation uses only the query tokens
         embedding_ids, centroid_scores = self.generate_candidates(config, Q)
 
         return embedding_ids, centroid_scores
