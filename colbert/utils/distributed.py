@@ -23,6 +23,8 @@ def init(rank, gpus):
         if len(gpus) > 0:
             print(f'nranks = {nranks} \t gpus = {gpus} \t device={gpus[rank]}')
 
+            assert torch.cuda.device_count() >= len(gpus), f"{gpus} not visible to pytorch"
+
             torch.cuda.set_device(gpus[rank])
             torch.distributed.init_process_group(backend='nccl', init_method='env://')
         else:

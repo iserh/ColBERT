@@ -78,13 +78,13 @@ class Launcher:
 
         if not self.return_all:
             return_values = return_values[0]
-        
+
         for proc in all_procs:
             proc.join()
             print("#> Joined...")
 
         print_memory_stats('MAIN')
-        
+
         return return_values
 
 
@@ -106,7 +106,7 @@ def setup_new_process(callee, port, return_value_queue, config, *args):
     # TODO: Ideally the gpus "getter" handles this max-nranks thing!
     os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, config.gpus_[:nranks]))
 
-    nranks_, distributed_ = distributed.init(rank, config.gpus_[:nranks])
+    nranks_, distributed_ = distributed.init(rank)
     assert nranks_ == nranks
 
     # Run.init(args.rank, args.root, args.experiment, args.run)
