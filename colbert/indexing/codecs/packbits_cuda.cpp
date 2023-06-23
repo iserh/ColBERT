@@ -7,6 +7,6 @@ torch::Tensor packbits(const torch::Tensor residuals) {
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("packbits_cpp", &packbits, "Pack bits");
+    m.def("packbits_cuda_cpp", &packbits, "Pack bits");
 }
 

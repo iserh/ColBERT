@@ -256,7 +256,8 @@ class CollectionIndexer():
         print_memory_stats(f'***3*** \t RANK:{self.rank}')
 
         heldout_fraction = 0.05
-        heldout_size = int(min(heldout_fraction * sample.size(0), 50_000))
+        # sample at most 50_000 or 15e6/embedding_dim (because torch quantile later cannot handle more than 16M elements)
+        heldout_size = int(min(heldout_fraction * sample.size(0), 50_000, 15e6 // self.config.dim))
         sample, sample_heldout = sample.split([sample.size(0) - heldout_size, heldout_size], dim=0)
 
         print_memory_stats(f'***4*** \t RANK:{self.rank}')
@@ -267,10 +268,9 @@ class CollectionIndexer():
         if self.use_gpu:
             torch.cuda.empty_cache()
 
-        device = self.config.gpus_[self.config.rank]
         do_fork_for_faiss = False  # set to True to free faiss GPU-0 memory at the cost of one more copy of `sample`.
 
-        args_ = [self.config.dim, self.num_partitions, self.config.kmeans_niters, [device]]
+        args_ = [self.config.dim, self.num_partitions, self.config.kmeans_niters]
 
         if do_fork_for_faiss:
             # For this to work reliably, write the sample to disk. Pickle may not handle >4GB of data.
@@ -474,8 +474,9 @@ class CollectionIndexer():
             f.write(ujson.dumps(d, indent=4) + '\n')
 
 
-def compute_faiss_kmeans(dim, num_partitions, kmeans_niters, device, shared_lists, return_value_queue=None):
-    kmeans = faiss.Kmeans(dim, num_partitions, niter=kmeans_niters, gpu=device, verbose=True, seed=123)
+def compute_faiss_kmeans(dim, num_partitions, kmeans_niters, shared_lists, return_value_queue=None):
+    use_gpu = torch.cuda.is_available()
+    kmeans = faiss.Kmeans(dim, num_partitions, niter=kmeans_niters, gpu=use_gpu, verbose=True, seed=123)
 
     sample = shared_lists[0][0]
     sample = sample.float().numpy()

@@ -20,6 +20,18 @@ class ResidualEmbeddingsStrided:
         self.codes_strided = StridedTensor(self.codes, doclens, use_gpu=self.use_gpu)
         self.residuals_strided = StridedTensor(self.residuals, doclens, use_gpu=self.use_gpu)
 
+    def cuda(self, device: int | None = None) -> "ResidualEmbeddingsStrided":
+        self.use_gpu = True
+        self.codes_strided = self.codes_strided.cuda(device)
+        self.residuals_strided = self.residuals_strided.cuda(device)
+        return self
+
+    def cpu(self) -> "ResidualEmbeddingsStrided":
+        self.use_gpu = False
+        self.codes_strided = self.codes_strided.cpu()
+        self.residuals_strided = self.residuals_strided.cpu()
+        return self
+
     def lookup_eids(self, embedding_ids, codes=None, out_device='cuda'):
         codes = self.codes[embedding_ids] if codes is None else codes
         residuals = self.residuals[embedding_ids]

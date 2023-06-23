@@ -11,16 +11,38 @@ import pathlib
 from torch.utils.cpp_extension import load
 
 
+def try_load_torch_extensions(cls):
+    if hasattr(cls, "loaded_extensions"):
+        return
+
+    print_message(f"Loading segmented_maxsim_cpp extension (set COLBERT_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)...")
+    segmented_maxsim_cpp = load(
+        name="segmented_maxsim_cpp",
+        sources=[
+            os.path.join(
+                pathlib.Path(__file__).parent.resolve(), "segmented_maxsim.cpp"
+            ),
+        ],
+        extra_cflags=["-O3"],
+        verbose=os.getenv("COLBERT_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
+    )
+    cls.segmented_maxsim = segmented_maxsim_cpp.segmented_maxsim_cpp
+
+    cls.loaded_extensions = True
+
+
 class ColBERT(BaseColBERT):
     """
         This class handles the basic encoding and scoring operations in ColBERT. It is used for training.
     """
 
+    def __new__(cls, *args, **kwargs):
+        try_load_torch_extensions(cls)
+        return super().__new__(cls)
+
     def __init__(self, name='bert-base-uncased', colbert_config=None):
         super().__init__(name, colbert_config)
         self.use_gpu = len(colbert_config.gpus_) > 0
-
-        ColBERT.try_load_torch_extensions(self.use_gpu)
 
         if self.colbert_config.mask_punctuation:
             self.skiplist = {w: True
@@ -28,26 +50,12 @@ class ColBERT(BaseColBERT):
                              for w in [symbol, self.raw_tokenizer.encode(symbol, add_special_tokens=False)[0]]}
         self.pad_token = self.raw_tokenizer.pad_token_id
 
-
     @classmethod
-    def try_load_torch_extensions(cls, use_gpu):
-        if hasattr(cls, "loaded_extensions") or use_gpu:
-            return
+    def segmented_maxsim(cls, *args, **kwargs):
+        if not hasattr(cls, "loaded_extensions"):
+            try_load_torch_extensions(cls)
 
-        print_message(f"Loading segmented_maxsim_cpp extension (set COLBERT_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)...")
-        segmented_maxsim_cpp = load(
-            name="segmented_maxsim_cpp",
-            sources=[
-                os.path.join(
-                    pathlib.Path(__file__).parent.resolve(), "segmented_maxsim.cpp"
-                ),
-            ],
-            extra_cflags=["-O3"],
-            verbose=os.getenv("COLBERT_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
-        )
-        cls.segmented_maxsim = segmented_maxsim_cpp.segmented_maxsim_cpp
-
-        cls.loaded_extensions = True
+        return cls.segmented_maxsim(*args, **kwargs)
 
     def forward(self, Q, D):
         Q = self.query(*Q)

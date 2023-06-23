@@ -106,7 +106,7 @@ def setup_new_process(callee, port, return_value_queue, config, *args):
     # TODO: Ideally the gpus "getter" handles this max-nranks thing!
     os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, config.gpus_[:nranks]))
 
-    nranks_, distributed_ = distributed.init(rank)
+    nranks_, distributed_ = distributed.init(rank, config.gpus_[:nranks])
     assert nranks_ == nranks
 
     # Run.init(args.rank, args.root, args.experiment, args.run)

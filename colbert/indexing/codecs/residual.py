@@ -15,13 +15,53 @@ import pathlib
 from torch.utils.cpp_extension import load
 
 
+def try_load_torch_extensions(cls):
+    if hasattr(cls, "loaded_extensions") or not torch.cuda.is_available():
+        return
+
+    print_message(f"Loading decompress_residuals_cuda_cpp extension (set COLBERT_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)...")
+    decompress_residuals_cuda_cpp = load(
+        name="decompress_residuals_cuda_cpp",
+        sources=[
+            os.path.join(
+                pathlib.Path(__file__).parent.resolve(), "decompress_residuals_cuda.cpp"
+            ),
+            os.path.join(
+                pathlib.Path(__file__).parent.resolve(), "decompress_residuals.cu"
+            ),
+        ],
+        verbose=os.getenv("COLBERT_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
+    )
+    cls.decompress_residuals = decompress_residuals_cuda_cpp.decompress_residuals_cuda_cpp
+
+    print_message(f"Loading packbits_cuda_cpp extension (set COLBERT_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)...")
+    packbits_cuda_cpp = load(
+        name="packbits_cuda_cpp",
+        sources=[
+            os.path.join(
+                pathlib.Path(__file__).parent.resolve(), "packbits_cuda.cpp"
+            ),
+            os.path.join(
+                pathlib.Path(__file__).parent.resolve(), "packbits.cu"
+            ),
+        ],
+        verbose=os.getenv("COLBERT_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
+    )
+    cls.packbits = packbits_cuda_cpp.packbits_cuda_cpp
+
+    cls.loaded_extensions = True
+
+
 class ResidualCodec:
     Embeddings = ResidualEmbeddings
 
-    def __init__(self, config, centroids, avg_residual=None, bucket_cutoffs=None, bucket_weights=None):
-        self.use_gpu = len(config.gpus_) > 0
+    def __new__(cls, *args, **kwargs):
+        try_load_torch_extensions(cls)
+        return super().__new__(cls)
 
-        ResidualCodec.try_load_torch_extensions(self.use_gpu)
+    def __init__(self, config, centroids, avg_residual=None, bucket_cutoffs=None, bucket_weights=None, use_gpu=True):
+        self.use_gpu = use_gpu and len(config.gpus_) > 0 and torch.cuda.is_available()
+        self.device = torch.cuda.current_device() if self.use_gpu else "cpu"
 
         if self.use_gpu > 0:
             self.centroids = centroids.cuda().half()
@@ -94,45 +134,44 @@ class ResidualCodec:
             if self.decompression_lookup_table is not None:
                 self.decompression_lookup_table = self.decompression_lookup_table.cuda()
 
+    def cuda(self, device: int | None = None) -> "ResidualCodec":
+        self.use_gpu = True
+        self.device = device if device is not None else torch.cuda.current_device()
+
+        self.centroids = self.centroids.cuda(device).half()
+        if torch.is_tensor(self.avg_residual):
+            self.avg_residual = self.avg_residual.cuda(device).half()
+        if torch.is_tensor(self.bucket_cutoffs):
+            self.bucket_cutoffs = self.bucket_cutoffs.cuda(device)
+        if torch.is_tensor(self.bucket_weights):
+            self.bucket_weights = self.bucket_weights.cuda(device).half()
+        self.arange_bits = self.arange_bits.cuda(device)
+        self.reversed_bit_map = self.reversed_bit_map.cuda(device)
+        if self.decompression_lookup_table is not None:
+            self.decompression_lookup_table = self.decompression_lookup_table.cuda(device)
+
+        return self
+
+    def cpu(self) -> "ResidualCodec":
+        self.use_gpu = False
+        self.device = "cpu"
+
+        self.centroids = self.centroids.cpu().float()
+        if torch.is_tensor(self.avg_residual):
+            self.avg_residual = self.avg_residual.cpu().float()
+        if torch.is_tensor(self.bucket_cutoffs):
+            self.bucket_cutoffs = self.bucket_cutoffs.cpu()
+        if torch.is_tensor(self.bucket_weights):
+            self.bucket_weights = self.bucket_weights.cpu().float()
+        self.arange_bits = self.arange_bits.cpu()
+        self.reversed_bit_map = self.reversed_bit_map.cpu()
+        if self.decompression_lookup_table is not None:
+            self.decompression_lookup_table = self.decompression_lookup_table.cpu()
+
+        return self
+
     @classmethod
-    def try_load_torch_extensions(cls, use_gpu):
-        if hasattr(cls, "loaded_extensions") or not use_gpu:
-            return
-
-        print_message(f"Loading decompress_residuals_cpp extension (set COLBERT_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)...")
-        decompress_residuals_cpp = load(
-            name="decompress_residuals_cpp",
-            sources=[
-                os.path.join(
-                    pathlib.Path(__file__).parent.resolve(), "decompress_residuals.cpp"
-                ),
-                os.path.join(
-                    pathlib.Path(__file__).parent.resolve(), "decompress_residuals.cu"
-                ),
-            ],
-            verbose=os.getenv("COLBERT_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
-        )
-        cls.decompress_residuals = decompress_residuals_cpp.decompress_residuals_cpp
-
-        print_message(f"Loading packbits_cpp extension (set COLBERT_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)...")
-        packbits_cpp = load(
-            name="packbits_cpp",
-            sources=[
-                os.path.join(
-                    pathlib.Path(__file__).parent.resolve(), "packbits.cpp"
-                ),
-                os.path.join(
-                    pathlib.Path(__file__).parent.resolve(), "packbits.cu"
-                ),
-            ],
-            verbose=os.getenv("COLBERT_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
-        )
-        cls.packbits = packbits_cpp.packbits_cpp
-
-        cls.loaded_extensions = True
-
-    @classmethod
-    def load(cls, index_path):
+    def load(cls, index_path, use_gpu=True):
         config = ColBERTConfig.load_from_index(index_path)
         centroids_path = os.path.join(index_path, 'centroids.pt')
         avgresidual_path = os.path.join(index_path, 'avg_residual.pt')
@@ -145,7 +184,7 @@ class ResidualCodec:
         if avg_residual.dim() == 0:
             avg_residual = avg_residual.item()
 
-        return cls(config=config, centroids=centroids, avg_residual=avg_residual, bucket_cutoffs=bucket_cutoffs, bucket_weights=bucket_weights)
+        return cls(config=config, centroids=centroids, avg_residual=avg_residual, bucket_cutoffs=bucket_cutoffs, bucket_weights=bucket_weights, use_gpu=use_gpu)
 
     def save(self, index_path):
         assert self.avg_residual is not None

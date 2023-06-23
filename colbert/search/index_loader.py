@@ -2,7 +2,6 @@ import os
 import ujson
 import torch
 import numpy as np
-import tqdm
 
 from colbert.utils.utils import lengths2offsets, print_message, dotdict, flatten
 from colbert.indexing.codecs.residual import ResidualCodec
@@ -13,7 +12,8 @@ from colbert.search.strided_tensor import StridedTensor
 class IndexLoader:
     def __init__(self, index_path, use_gpu=True):
         self.index_path = index_path
-        self.use_gpu = use_gpu
+        self.use_gpu = use_gpu and torch.cuda.is_available()
+        self.device = torch.cuda.current_device() if self.use_gpu else "cpu"
 
         self._load_codec()
         self._load_ivf()
@@ -21,9 +21,23 @@ class IndexLoader:
         self._load_doclens()
         self._load_embeddings()
 
+    def cuda(self, device: int | None = None) -> None:
+        self.use_gpu = True
+        self.device = device if device is not None else torch.cuda.current_device()
+        self.codec = self.codec.cuda(device)
+        self.ivf = self.ivf.cuda(device)
+        return self
+
+    def cpu(self) -> None:
+        self.use_gpu = False
+        self.device = "cpu"
+        self.codec = self.codec.cpu()
+        self.ivf = self.ivf.cpu()
+        return self
+
     def _load_codec(self):
         print_message(f"#> Loading codec...")
-        self.codec = ResidualCodec.load(self.index_path)
+        self.codec = ResidualCodec.load(self.index_path, self.use_gpu)
 
     def _load_ivf(self):
         print_message(f"#> Loading IVF...")
@@ -49,7 +63,7 @@ class IndexLoader:
 
         print_message("#> Loading doclens...")
 
-        for chunk_idx in tqdm.tqdm(range(self.num_chunks)):
+        for chunk_idx in range(self.num_chunks):
             with open(os.path.join(self.index_path, f'doclens.{chunk_idx}.json')) as f:
                 chunk_doclens = ujson.load(f)
                 doclens.extend(chunk_doclens)

@@ -29,14 +29,14 @@ class ResidualEmbeddings:
 
         dim, nbits = get_dim_and_nbits(index_path)
 
-        codes = torch.empty(num_embeddings, dtype=torch.int32)
-        residuals = torch.empty(num_embeddings, dim // 8 * nbits, dtype=torch.uint8)
+        codes = torch.zeros(num_embeddings, dtype=torch.int32)
+        residuals = torch.zeros(num_embeddings, dim // 8 * nbits, dtype=torch.uint8)
 
         codes_offset = 0
 
         print_message("#> Loading codes and residuals...")
 
-        for chunk_idx in tqdm.tqdm(chunk_idxs):
+        for chunk_idx in chunk_idxs:
             chunk = cls.load(index_path, chunk_idx)
 
             codes_endpos = codes_offset + chunk.codes.size(0)

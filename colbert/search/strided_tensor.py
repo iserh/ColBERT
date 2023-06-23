@@ -11,31 +11,34 @@ import pathlib
 from torch.utils.cpp_extension import load
 
 
+def try_load_torch_extensions(cls):
+    if hasattr(cls, "loaded_extensions"):
+        return
+
+    print_message(f"Loading segmented_lookup_cpp extension (set COLBERT_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)...")
+    segmented_lookup_cpp = load(
+        name="segmented_lookup_cpp",
+        sources=[
+            os.path.join(
+                pathlib.Path(__file__).parent.resolve(), "segmented_lookup.cpp"
+            ),
+        ],
+        extra_cflags=["-O3"],
+        verbose=os.getenv("COLBERT_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
+    )
+    cls.segmented_lookup = segmented_lookup_cpp.segmented_lookup_cpp
+
+    cls.loaded_extensions = True
+
+
 class StridedTensor(StridedTensorCore):
+
+    def __new__(cls, *args, **kwargs):
+        try_load_torch_extensions(cls)
+        return super().__new__(cls)
+
     def __init__(self, packed_tensor, lengths, dim=None, use_gpu=True):
         super().__init__(packed_tensor, lengths, dim=dim, use_gpu=use_gpu)
-
-        StridedTensor.try_load_torch_extensions(use_gpu)
-
-    @classmethod
-    def try_load_torch_extensions(cls, use_gpu):
-        if hasattr(cls, "loaded_extensions") or use_gpu:
-            return
-
-        print_message(f"Loading segmented_lookup_cpp extension (set COLBERT_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)...")
-        segmented_lookup_cpp = load(
-            name="segmented_lookup_cpp",
-            sources=[
-                os.path.join(
-                    pathlib.Path(__file__).parent.resolve(), "segmented_lookup.cpp"
-                ),
-            ],
-            extra_cflags=["-O3"],
-            verbose=os.getenv("COLBERT_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
-        )
-        cls.segmented_lookup = segmented_lookup_cpp.segmented_lookup_cpp
-
-        cls.loaded_extensions = True
 
     @classmethod
     def pad_packed(cls, packed_tensor, lengths):

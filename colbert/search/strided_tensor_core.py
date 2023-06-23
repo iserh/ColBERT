@@ -20,7 +20,8 @@ class StridedTensorCore:
         self.dim = dim
         self.tensor = packed_tensor
         self.inner_dims = self.tensor.size()[1:]
-        self.use_gpu = use_gpu
+        self.use_gpu = use_gpu and torch.cuda.is_available()
+        self.device = torch.cuda.current_device() if self.use_gpu else "cpu"
 
         self.lengths = lengths.long() if torch.is_tensor(lengths) else torch.LongTensor(lengths)
 
@@ -39,6 +40,26 @@ class StridedTensorCore:
             self.tensor = torch.cat((self.tensor, padding))
 
         self.views = {stride: _create_view(self.tensor, stride, self.inner_dims) for stride in self.strides}
+
+    def cuda(self, device: int | None = None) -> "StridedTensorCore":
+        self.use_gpu = True
+        self.device = device if device is not None else torch.cuda.current_device()
+
+        # self.tensor = self.tensor.cuda(device)
+        # self.lengths = self.lengths.cuda(device)
+        # self.offsets = self.offsets.cuda(device)
+
+        return self
+
+    def cpu(self) -> "StridedTensorCore":
+        self.use_gpu = False
+        self.device = "cpu"
+
+        # self.tensor = self.tensor.cpu()
+        # self.lengths = self.lengths.cpu()
+        # self.offsets = self.offsets.cpu()
+
+        return self
 
     @classmethod
     def from_packed_tensor(cls, tensor, lengths):
@@ -96,7 +117,9 @@ class StridedTensorCore:
 def _select_strides(lengths, quantiles):
     if lengths.size(0) < 5_000:
         return _get_quantiles(lengths, quantiles)
-    
+
+    # sample using torch.arange instead of randint to stay deterministic !
+    # sample = torch.arange(0, lengths.size(0), step=lengths.size(0) // 2_000)
     sample = torch.randint(0, lengths.size(0), size=(2_000,))
 
     return _get_quantiles(lengths[sample], quantiles)

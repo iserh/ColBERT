@@ -18,6 +18,6 @@ torch::Tensor decompress_residuals(
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("decompress_residuals_cpp", &decompress_residuals,
+    m.def("decompress_residuals_cuda_cpp", &decompress_residuals,
           "Decompress residuals");
 }
