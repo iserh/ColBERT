@@ -6,15 +6,19 @@ import itertools
 
 from multiprocessing import Pool
 from collections import OrderedDict, defaultdict
+from logging import getLogger
+
+logger = getLogger(__name__)
 
 
 def print_message(*s, condition=True, pad=False):
     s = ' '.join([str(x) for x in s])
-    msg = "[{}] {}".format(datetime.datetime.now().strftime("%b %d, %H:%M:%S"), s)
+    # msg = "[{}] {}".format(datetime.datetime.now().strftime("%b %d, %H:%M:%S"), s)
+    msg = s
 
     if condition:
         msg = msg if not pad else f'\n{msg}\n'
-        print(msg, flush=True)
+        logger.debug(msg, flush=True)
 
 
     return msg
@@ -42,7 +46,7 @@ def torch_load_dnn(path):
         dnn = torch.hub.load_state_dict_from_url(path, map_location='cpu')
     else:
         dnn = torch.load(path, map_location='cpu')
-    
+
     return dnn
 
 def save_checkpoint(path, epoch_idx, mb_idx, model, optimizer, arguments=None):
@@ -195,7 +199,7 @@ def zip_first(L1, L2):
 def int_or_float(val):
     if '.' in val:
         return float(val)
-        
+
     return int(val)
 
 def load_ranking(path, types=None, lazy=False):
@@ -306,5 +310,5 @@ def load_batch_backgrounds(args, qids):
 
         x = ' [SEP] '.join(x)
         qbackgrounds.append(x)
-    
+
     return qbackgrounds
