@@ -6,19 +6,19 @@ import itertools
 
 from multiprocessing import Pool
 from collections import OrderedDict, defaultdict
-from logging import getLogger
+import logging
 
-logger = getLogger(__name__)
+logger = logging.getLogger("colbert")
 
 
 def print_message(*s, condition=True, pad=False):
     s = ' '.join([str(x) for x in s])
-    msg = "[{}] {}".format(datetime.datetime.now().strftime("%b %d, %H:%M:%S"), s)
+    # msg = "[{}] {}".format(datetime.datetime.now().strftime("%b %d, %H:%M:%S"), s)
+    msg = s
 
     if condition:
         msg = msg if not pad else f'\n{msg}\n'
-        print(msg, flush=True)
-
+        logger.info(msg)
 
     return msg
 

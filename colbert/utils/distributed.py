@@ -2,6 +2,9 @@ import os
 import random
 import torch
 import numpy as np
+from logging import getLogger
+
+logger = getLogger("colbert")
 
 ALREADY_INITALIZED = False
 
@@ -21,7 +24,7 @@ def init(rank, gpus):
 
     if is_distributed:
         if len(gpus) > 0:
-            print(f'nranks = {nranks} \t gpus = {gpus} \t device={gpus[rank]}')
+            logger.info(f'nranks = {nranks} \t gpus = {gpus} \t device={gpus[rank]}')
 
             assert torch.cuda.device_count() >= len(gpus), f"{gpus} not visible to pytorch"
 

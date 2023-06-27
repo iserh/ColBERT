@@ -2,6 +2,7 @@ import os
 import time
 import torch
 import random
+import logging
 
 import torch.multiprocessing as mp
 import numpy as np
@@ -66,7 +67,7 @@ class Launcher:
         print_memory_stats('MAIN')
 
         for proc in all_procs:
-            print("#> Starting...")
+            print_message("#> Starting...")
             proc.start()
 
         print_memory_stats('MAIN')
@@ -81,7 +82,7 @@ class Launcher:
 
         for proc in all_procs:
             proc.join()
-            print("#> Joined...")
+            print_message("#> Joined...")
 
         print_memory_stats('MAIN')
 
@@ -90,6 +91,22 @@ class Launcher:
 
 def setup_new_process(callee, port, return_value_queue, config, *args):
     print_memory_stats()
+
+    old_factory = logging.getLogRecordFactory()
+
+    def record_factory(*args, **kwargs):
+        record = old_factory(*args, **kwargs)
+        record.rank = os.environ.get("RANK", "#")
+        return record
+
+    logging.setLogRecordFactory(record_factory)
+    logging.basicConfig(
+        format='[%(rank)s][%(asctime)s] [%(levelname)s] [%(funcName)s] %(message)s',
+        level=logging.WARNING,  # default
+    )
+
+    colbert_logger = logging.getLogger("colbert")
+    colbert_logger.setLevel(logging.INFO)
 
     random.seed(12345)
     np.random.seed(12345)
