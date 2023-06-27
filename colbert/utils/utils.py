@@ -13,12 +13,11 @@ logger = getLogger(__name__)
 
 def print_message(*s, condition=True, pad=False):
     s = ' '.join([str(x) for x in s])
-    # msg = "[{}] {}".format(datetime.datetime.now().strftime("%b %d, %H:%M:%S"), s)
-    msg = s
+    msg = "[{}] {}".format(datetime.datetime.now().strftime("%b %d, %H:%M:%S"), s)
 
     if condition:
         msg = msg if not pad else f'\n{msg}\n'
-        logger.debug(msg, flush=True)
+        print(msg, flush=True)
 
 
     return msg
