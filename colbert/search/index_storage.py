@@ -113,8 +113,10 @@ class IndexScorer(IndexLoader, CandidateGeneration):
         """
 
         # TODO: Remove batching?
-        n_elem = torch.prod(torch.Tensor([Q.size()]))
-        batch_size = 2 ** (32 - int(torch.log2(n_elem)))
+        avg_doclen = torch.mean(self.doclens, dtype=torch.float32)
+        query_len = Q.size(1)
+        n_possible_pairs = avg_doclen * query_len
+        batch_size = int(config.ideal_batch_size * ((256 * 256) / n_possible_pairs))
 
         if self.use_gpu:
             centroid_scores = centroid_scores.cuda()
@@ -147,13 +149,15 @@ class IndexScorer(IndexLoader, CandidateGeneration):
                 pids = pids[torch.topk(approx_scores, k=config.ndocs).indices]
 
             # Filter docs using full centroid scores
-            codes_packed, codes_lengths = self.embeddings_strided.lookup_codes(pids)
-            approx_scores = centroid_scores[codes_packed.long()]
-            approx_scores_strided = StridedTensor(approx_scores, codes_lengths, use_gpu=self.use_gpu)
-            approx_scores_padded, approx_scores_mask = approx_scores_strided.as_padded_tensor()
-            approx_scores = colbert_score_reduce(approx_scores_padded, approx_scores_mask, config)
-            if config.ndocs // 4 < len(approx_scores):
-                pids = pids[torch.topk(approx_scores, k=(config.ndocs // 4)).indices]
+            if config.use_full_centroid_approx:
+                codes_packed, codes_lengths = self.embeddings_strided.lookup_codes(pids)
+                approx_scores = centroid_scores[codes_packed.long()]
+                approx_scores_strided = StridedTensor(approx_scores, codes_lengths, use_gpu=self.use_gpu)
+                approx_scores_padded, approx_scores_mask = approx_scores_strided.as_padded_tensor()
+                approx_scores = colbert_score_reduce(approx_scores_padded, approx_scores_mask, config)
+                if config.ndocs // 4 < len(approx_scores):
+                    pids = pids[torch.topk(approx_scores, k=(config.ndocs // 4)).indices]
+
         else:
             pids = IndexScorer.filter_pids(
                     pids, centroid_scores, self.embeddings.codes, self.doclens,
