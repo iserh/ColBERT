@@ -112,44 +112,66 @@ class IndexScorer(IndexLoader, CandidateGeneration):
             Otherwise, each query matrix will be compared against the *aligned* passage.
         """
 
-        # TODO: Remove batching?
+        # We need to make the batch size dependent on the number of codes
+        # that are about to score in plaid stage 2 => longer queries, longer docs
+        # have more token embeddings - higher memory footprint
         avg_doclen = torch.mean(self.doclens, dtype=torch.float32)
         query_len = Q.size(1)
-        n_possible_pairs = avg_doclen * query_len
-        batch_size = int(config.ideal_batch_size * ((256 * 256) / n_possible_pairs))
+        # this is an upper bound to the number of elements (batchsize=1)
+        # in approx_scores_ (due to pruning it will be lower)
+        n_element_est = avg_doclen * query_len
+        batch_size = int(config.plaid_num_elem_batch / n_element_est)
 
         if self.use_gpu:
+            # dtype: float16, shape: [|C|, length_query]
             centroid_scores = centroid_scores.cuda()
 
         idx = centroid_scores.max(-1).values >= config.centroid_score_threshold
 
-        if self.use_gpu:
-            approx_scores = []
+        if self.use_gpu and config.plaid_stage_2_3_cpu:
+            pids = IndexScorer.filter_pids(
+                pids.cpu(), centroid_scores.float().cpu(), self.embeddings.codes, self.doclens,
+                self.embeddings_strided.codes_strided.offsets, idx.cpu(), config.ndocs
+            )
+            pids = pids.cuda()
 
+        elif self.use_gpu:
+            approx_scores = []
             # Filter docs using pruned centroid scores
             for i in range(0, ceil(len(pids) / batch_size)):
                 pids_ = pids[i * batch_size : (i+1) * batch_size]
+                # dtype: int, shape: [sum(lengths),] - select centroid for doc-token
                 codes_packed, codes_lengths = self.embeddings_strided.lookup_codes(pids_)
+                # dtype bool, shape: [sum(lengths),] - indicates which centroids get pruned
                 idx_ = idx[codes_packed.long()]
                 pruned_codes_strided = StridedTensor(idx_, codes_lengths, use_gpu=self.use_gpu)
+                # dtype: bool, shape: [|pids|, max(lengths_pruned_codes)]
                 pruned_codes_padded, pruned_codes_mask = pruned_codes_strided.as_padded_tensor()
                 pruned_codes_lengths = (pruned_codes_padded * pruned_codes_mask).sum(dim=1)
+                # dtype: int, shape: [sum(lengths_pruned_codes),]
                 codes_packed_ = codes_packed[idx_]
+                codes_packed_ = codes_packed_.long() # TODO: Remove
+                # dtype: float16, shape: [sum(lengths_pruned_codes), query_length]
                 approx_scores_ = centroid_scores[codes_packed_.long()]
                 if approx_scores_.shape[0] == 0:
                     approx_scores.append(torch.zeros((len(pids_),), dtype=approx_scores_.dtype).cuda())
                     continue
                 approx_scores_strided = StridedTensor(approx_scores_, pruned_codes_lengths, use_gpu=self.use_gpu)
+                # dtype: float16, shape: [|pids|, max(lengths_pruned_codes), query_length]
                 approx_scores_padded, approx_scores_mask = approx_scores_strided.as_padded_tensor()
+                # dtype: float16, shape: [|pids|,]
                 approx_scores_ = colbert_score_reduce(approx_scores_padded, approx_scores_mask, config)
                 approx_scores.append(approx_scores_)
             approx_scores = torch.cat(approx_scores, dim=0)
             assert approx_scores.is_cuda, approx_scores.device
             if config.ndocs < len(approx_scores):
-                pids = pids[torch.topk(approx_scores, k=config.ndocs).indices]
+                if not config.skip_plaid_stage_3:
+                    pids = pids[torch.topk(approx_scores, k=config.ndocs).indices]
+                elif config.ndocs // 4 < len(approx_scores):
+                    pids = pids[torch.topk(approx_scores, k=(config.ndocs // 4)).indices]
 
             # Filter docs using full centroid scores
-            if config.use_full_centroid_approx:
+            if not config.skip_plaid_stage_3:
                 codes_packed, codes_lengths = self.embeddings_strided.lookup_codes(pids)
                 approx_scores = centroid_scores[codes_packed.long()]
                 approx_scores_strided = StridedTensor(approx_scores, codes_lengths, use_gpu=self.use_gpu)
