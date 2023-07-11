@@ -61,15 +61,19 @@ class CollectionIndexer():
         with torch.inference_mode():
             self.setup() # Computes and saves plan for whole collection
             distributed.barrier(self.rank)
+            torch.cuda.empty_cache()
             print_memory_stats(f'RANK:{self.rank}')
+
 
             if not self.config.resume or not self.saver.try_load_codec():
                 self.train(shared_lists) # Trains centroids from selected passages
             distributed.barrier(self.rank)
+            torch.cuda.empty_cache()
             print_memory_stats(f'RANK:{self.rank}')
 
             self.index() # Encodes and saves all tokens into residuals
             distributed.barrier(self.rank)
+            torch.cuda.empty_cache()
             print_memory_stats(f'RANK:{self.rank}')
 
             self.finalize() # Builds metadata and centroid to passage mapping
@@ -476,8 +480,8 @@ class CollectionIndexer():
 
 
 def compute_faiss_kmeans(dim, num_partitions, kmeans_niters, shared_lists, return_value_queue=None):
-    use_gpu = torch.cuda.is_available()
-    kmeans = faiss.Kmeans(dim, num_partitions, niter=kmeans_niters, gpu=use_gpu, verbose=True, seed=123)
+    gpu = 1 if torch.cuda.is_available() else False
+    kmeans = faiss.Kmeans(dim, num_partitions, niter=kmeans_niters, gpu=gpu, verbose=True, seed=123)
 
     sample = shared_lists[0][0]
     sample = sample.float().numpy()
