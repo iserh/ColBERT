@@ -137,6 +137,8 @@ class CollectionIndexer():
 
         local_sample_embs, doclens = self.encoder.encode_passages(local_sample)
 
+        torch.cuda.empty_cache()
+
         if torch.cuda.is_available() and torch.distributed.is_initialized():
             self.num_sample_embs = torch.tensor([local_sample_embs.size(0)]).cuda()
             torch.distributed.all_reduce(self.num_sample_embs)
