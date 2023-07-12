@@ -480,8 +480,8 @@ class CollectionIndexer():
 
 
 def compute_faiss_kmeans(dim, num_partitions, kmeans_niters, shared_lists, return_value_queue=None):
-    gpu = 1 if torch.cuda.is_available() else False
-    kmeans = faiss.Kmeans(dim, num_partitions, niter=kmeans_niters, gpu=gpu, verbose=True, seed=123)
+    use_gpu = torch.cuda.is_available()
+    kmeans = faiss.Kmeans(dim, num_partitions, niter=kmeans_niters, gpu=use_gpu, verbose=True, seed=123)
 
     sample = shared_lists[0][0]
     sample = sample.float().numpy()
