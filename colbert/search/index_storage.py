@@ -121,6 +121,10 @@ class IndexScorer(IndexLoader, CandidateGeneration):
         # in approx_scores_ (due to pruning it will be lower)
         n_element_est = avg_doclen * query_len
         batch_size = int(config.plaid_num_elem_batch / n_element_est)
+        num_batches = ceil(len(pids) / batch_size)
+
+        assert num_batches > 0
+        assert len(pids)
 
         if self.use_gpu:
             # dtype: float16, shape: [|C|, length_query]
@@ -138,7 +142,7 @@ class IndexScorer(IndexLoader, CandidateGeneration):
         elif self.use_gpu:
             approx_scores = []
             # Filter docs using pruned centroid scores
-            for i in range(0, ceil(len(pids) / batch_size)):
+            for i in range(num_batches):
                 pids_ = pids[i * batch_size : (i+1) * batch_size]
                 # dtype: int, shape: [sum(lengths),] - select centroid for doc-token
                 codes_packed, codes_lengths = self.embeddings_strided.lookup_codes(pids_)
