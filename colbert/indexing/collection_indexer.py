@@ -105,8 +105,10 @@ class CollectionIndexer():
         # Select the number of partitions
         num_passages = len(self.collection)
         self.num_embeddings_est = num_passages * avg_doclen_est
-        fac = self.config.num_partitions_fac
-        self.num_partitions = int(2 ** np.floor(np.log2(fac * np.sqrt(self.num_embeddings_est))))
+        self.num_partitions = (
+            self.config.num_partitions or
+            int(2 ** np.floor(np.log2(16 * np.sqrt(self.num_embeddings_est))))
+        )
 
         Run().print_main(f'Creaing {self.num_partitions:,} partitions.')
         Run().print_main(f'*Estimated* {int(self.num_embeddings_est):,} embeddings.')

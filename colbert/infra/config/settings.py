@@ -161,7 +161,7 @@ class IndexingSettings:
 
     kmeans_niters: int = DefaultVal(4)
 
-    num_partitions_fac: int = DefaultVal(16)
+    num_partitions: int = DefaultVal(None)
 
     resume: bool = DefaultVal(False)
 
